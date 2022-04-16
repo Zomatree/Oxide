@@ -1,0 +1,26 @@
+[package]
+edition = "2021"
+name = "oxide"
+version = "0.1.0"
+
+[dependencies.pyo3-asyncio]
+features = ["tokio-runtime"]
+version = "0.16.0"
+
+[dependencies.pyo3]
+features = ["extension-module"]
+version = "0.16.3"
+
+[dependencies.hyper]
+features = ["full"]
+version = "0.14.18"
+
+[dependencies.futures]
+version = "0.3.21"
+
+[dependencies.async-trait]
+version = "0.1.53"
+
+[lib]
+crate-type = ["cdylib"]
+name = "oxide"
