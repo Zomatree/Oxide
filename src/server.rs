@@ -1,8 +1,8 @@
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use pyo3_asyncio::tokio::{get_current_locals, future_into_py};
 use hyper::Server as HyperServer;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use crate::routes::{Routes, Route};
 use crate::make_service::MakeService;
@@ -10,50 +10,20 @@ use crate::exceptions::BindingError;
 
 #[pyclass(subclass, dict)]
 #[derive(Debug, Clone, Default)]
-pub struct BaseServer {
+pub struct Server {
     pub routes: Routes,
 }
 
 #[pymethods]
-impl BaseServer {
+impl Server {
     #[new]
     fn new() -> Self {
         Self::default()
     }
 
-    fn _route(&mut self, path: String, methods: Vec<&str>, func: PyObject) {
-        let handler = Arc::new(func);
-
-        let mut route = Route::new(path);
-
-        if methods.contains(&"GET") {
-            route.get = Some(handler.clone());
-        };
-
-        if methods.contains(&"POST") {
-            route.post = Some(handler.clone());
-        };
-
-        if methods.contains(&"PUT") {
-            route.put = Some(handler.clone());
-        };
-
-        if methods.contains(&"DELETE") {
-            route.delete = Some(handler.clone());
-        };
-
-        if methods.contains(&"PATCH") {
-            route.patch = Some(handler.clone());
-        };
-
-        if methods.contains(&"OPTIONS") {
-            route.options = Some(handler.clone());
-        };
-
-        if methods.contains(&"HEAD") {
-            route.head = Some(handler);
-        };
-
+    #[args(kwargs="**")]
+    pub fn add_route(&mut self, path: String, cls: PyObject, kwargs: Option<Py<PyDict>>) {
+        let route = Route::new(path, cls, kwargs);
         self.routes.add_route(route);
     }
 

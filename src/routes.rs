@@ -1,4 +1,6 @@
-use pyo3::prelude::*;
+use hyper::Method;
+use pyo3::{prelude::*, types::{PyDict, PyTuple}};
+use pyo3_asyncio::{TaskLocals, into_future_with_locals};
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -7,22 +9,45 @@ pub enum PathPart {
     Variable(String),
 }
 
-#[pyclass]
-#[derive(Clone, Debug, Default)]
+pub struct PyRouteWrapper<'a>(PyObject, &'a TaskLocals);
+
+impl<'a> PyRouteWrapper<'a> {
+    pub fn new(route: PyObject, locals: &'a TaskLocals) -> Self {
+        PyRouteWrapper(route, locals)
+    }
+
+    pub async fn setup(&self) -> PyResult<PyObject> {
+        Python::with_gil::<_, PyResult<_>>(|py| {
+            let coro = self.0
+                .getattr(py, "setup")?
+                .call(py, (), None)?;
+
+                into_future_with_locals(self.1, coro.as_ref(py))
+        })?.await
+    }
+
+    pub async fn call_method(&self, method: Method, var_parts: Vec<String>) -> PyResult<PyObject> {
+        let method_name = method.to_string().to_lowercase();
+
+        Python::with_gil::<_, PyResult<_>>(|py| {
+            let coro = self.0
+                .getattr(py, &method_name)?
+                .call(py, PyTuple::new(py, var_parts), None)?;
+
+                into_future_with_locals(self.1, coro.as_ref(py))
+        })?.await
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Route {
     pub path_parts: Vec<PathPart>,
-
-    pub get: Option<Arc<PyObject>>,
-    pub post: Option<Arc<PyObject>>,
-    pub put: Option<Arc<PyObject>>,
-    pub delete: Option<Arc<PyObject>>,
-    pub patch: Option<Arc<PyObject>>,
-    pub options: Option<Arc<PyObject>>,
-    pub head: Option<Arc<PyObject>>,
+    pub python_cls: Py<PyAny>,
+    kwargs: Option<Py<PyDict>>,
 }
 
 impl Route {
-    pub fn new(path: String) -> Self {
+    pub fn new(path: String, cls: PyObject, kwargs: Option<Py<PyDict>>) -> Self {
         let path_parts = path
             .split('/')
             .map(|s| {
@@ -35,14 +60,22 @@ impl Route {
 
         Route {
             path_parts,
-            ..Default::default()
+            python_cls: cls,
+            kwargs
         }
+    }
+
+    pub fn create_instance<'a>(&self, locals: &'a TaskLocals) -> PyRouteWrapper<'a> {
+        let _self = Python::with_gil(|py|
+            self.python_cls.call(py, (), self.kwargs.as_ref().map(|d| d.as_ref(py))));
+
+        PyRouteWrapper::<'a>::new(_self.unwrap(), locals)
     }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct Routes {
-    pub routes: Vec<Route>,
+    pub routes: Vec<Arc<Route>>,
 }
 
 impl Routes {
@@ -51,14 +84,14 @@ impl Routes {
     }
 
     pub fn add_route(&mut self, route: Route) {
-        self.routes.push(route);
+        self.routes.push(Arc::new(route));
     }
 
-    pub fn get_route<'a>(&'a self, path: &str) -> (Vec<String>, Option<&'a Route>) {
+    pub fn get_route(&self, path: &str) -> (Vec<String>, Option<Arc<Route>>) {
         let parts = path.split('/').collect::<Vec<&str>>();
         let mut var_parts = Vec::new();
 
-        let route = self.routes.iter().find(|&route| {
+        let route = self.routes.iter().cloned().find(|route| {
             var_parts.clear();
             let mut route_parts = route.path_parts.iter();
             let mut parts_iter = parts.iter();

@@ -1,5 +1,4 @@
-from re import T
-from typing import Callable, Coroutine, Any
+from typing import Any
 
 class Response:
     body: str
@@ -7,7 +6,7 @@ class Response:
 
     def __init__(self, body: str, status: int): ...
 
-class BaseServer:
+class Server:
     def __init__(self): ...
-    def _route(self, path: str, methods: list[str], callback: Callable[..., Coroutine[Any, Any, Response]]): ...
+    def add_route(self, path: str, route: type, **kwargs: Any): ...
     async def start(self, host: str): ...
