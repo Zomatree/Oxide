@@ -61,4 +61,4 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           command: upload
-          args: --skip-existing * -u $PYPI_USERNAME -p $PYPI_PASSWORD
+          args: --skip-existing -u $PYPI_USERNAME -p $PYPI_PASSWORD *
