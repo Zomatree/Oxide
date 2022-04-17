@@ -8,7 +8,6 @@ class Echo(oxide.Route):
         print("setup")
 
     async def get(self, param: str):
-        print(param)
         return oxide.Response(body=param, status=200)
 
 server.add_route('/echo/:param', Echo)

@@ -32,36 +32,36 @@ impl Service<Request<Body>> for ServerService {
         Box::pin(async move {
             match route {
                 Some(route) => {
-                        let _self = route.create_instance(&locals);
+                    let _self = route.create_instance(&locals);
 
-                        if let Err(err) = _self.setup().await {
+                    if let Err(err) = _self.setup().await {
+                        Python::with_gil(|py| err.print_and_set_sys_last_vars(py));
+
+                        return HyperResponse::builder()
+                            .status(500)
+                            .body(Body::from("500: Internal Server Error"))
+                    };
+
+                    _self
+                        .call_method(method, var_parts)
+                        .await
+                        .and_then(|res| Python::with_gil(|py| res.extract::<Response>(py)))
+                        .and_then(|res| HyperResponse::builder()
+                            .status(res.status)
+                            .body(Body::from(res.body))
+                            .map_err(|err| ResponseError::new_err(format!("{err:?}"))))
+                        .or_else(|err| {
                             Python::with_gil(|py| err.print_and_set_sys_last_vars(py));
 
-                            return HyperResponse::builder()
+                            HyperResponse::builder()
                                 .status(500)
-                                .body(Body::from(""))
-                        };
-
-                        _self
-                            .call_method(method, var_parts)
-                            .await
-                            .and_then(|res| Python::with_gil(|py| res.extract::<Response>(py)))
-                            .and_then(|res| HyperResponse::builder()
-                                .status(res.status)
-                                .body(Body::from(res.body))
-                                .map_err(|err| ResponseError::new_err(format!("{err:?}"))))
-                            .or_else(|err| {
-                                Python::with_gil(|py| err.print_and_set_sys_last_vars(py));
-
-                                HyperResponse::builder()
-                                    .status(500)
-                                    .body(Body::from(""))
-                            })
+                                .body(Body::from("500: Internal Server Error"))
+                        })
                 },
                 None => {
                     HyperResponse::builder()
                         .status(404)
-                        .body(Body::from(""))
+                        .body(Body::from("404: Not Found"))
                 }
             }
         })
