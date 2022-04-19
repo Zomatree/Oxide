@@ -341,6 +341,7 @@ dependencies = [
  "async-trait",
  "futures",
  "hyper",
+ "once_cell",
  "pyo3",
  "pyo3-asyncio",
 ]

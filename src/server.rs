@@ -4,9 +4,10 @@ use pyo3_asyncio::tokio::{get_current_locals, future_into_py};
 use hyper::Server as HyperServer;
 use std::net::SocketAddr;
 
+use crate::LOCAL_TASKS;
 use crate::routes::{Routes, Route};
 use crate::make_service::MakeService;
-use crate::exceptions::BindingError;
+use crate::exceptions::{BindingError, WebError};
 
 #[pyclass(subclass, dict)]
 #[derive(Debug, Clone, Default)]
@@ -29,17 +30,24 @@ impl Server {
 
     fn start<'a>(&'a self, py: Python<'a>, host: String) -> PyResult<&'a PyAny> {
         let routes = self.routes.clone();
+
         let locals = get_current_locals(py)?;
+
+        LOCAL_TASKS
+            .set(locals)
+            .unwrap();
 
         future_into_py(py, async move {
             let addr: SocketAddr = host.parse().unwrap();
             let server = HyperServer::try_bind(&addr)
                 .map_err(|_| BindingError::new_err("could not bind to address"))?
-                .serve(MakeService { routes, locals });
-            println!("running on {addr}");
-            server.await.unwrap();
+                .serve(MakeService { routes });
 
-            Ok(())
+            println!("running on {addr}");
+
+            server
+                .await
+                .map_err(|e| WebError::new_err(format!("{e:?}")))
         })
     }
 }

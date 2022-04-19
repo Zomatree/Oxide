@@ -1,7 +1,9 @@
 use hyper::Method;
 use pyo3::{prelude::*, types::{PyDict, PyTuple}};
-use pyo3_asyncio::{TaskLocals, into_future_with_locals};
+use pyo3_asyncio::into_future_with_locals;
 use std::sync::Arc;
+
+use crate::LOCAL_TASKS;
 
 #[derive(Clone, Debug)]
 pub enum PathPart {
@@ -9,11 +11,11 @@ pub enum PathPart {
     Variable(String),
 }
 
-pub struct PyRouteWrapper<'a>(PyObject, &'a TaskLocals);
+pub struct PyRouteWrapper(PyObject);
 
-impl<'a> PyRouteWrapper<'a> {
-    pub fn new(route: PyObject, locals: &'a TaskLocals) -> Self {
-        PyRouteWrapper(route, locals)
+impl PyRouteWrapper {
+    pub fn new(route: PyObject) -> Self {
+        PyRouteWrapper(route)
     }
 
     pub async fn setup(&self) -> PyResult<PyObject> {
@@ -22,7 +24,7 @@ impl<'a> PyRouteWrapper<'a> {
                 .getattr(py, "setup")?
                 .call(py, (), None)?;
 
-                into_future_with_locals(self.1, coro.as_ref(py))
+                into_future_with_locals(LOCAL_TASKS.get().unwrap(), coro.as_ref(py))
         })?.await
     }
 
@@ -34,7 +36,7 @@ impl<'a> PyRouteWrapper<'a> {
                 .getattr(py, &method_name)?
                 .call(py, PyTuple::new(py, var_parts), None)?;
 
-                into_future_with_locals(self.1, coro.as_ref(py))
+                into_future_with_locals(LOCAL_TASKS.get().unwrap(), coro.as_ref(py))
         })?.await
     }
 }
@@ -65,11 +67,11 @@ impl Route {
         }
     }
 
-    pub fn create_instance<'a>(&self, locals: &'a TaskLocals) -> PyRouteWrapper<'a> {
-        let _self = Python::with_gil(|py|
+    pub fn create_instance(&self) -> PyRouteWrapper {
+        let instance = Python::with_gil(|py|
             self.python_cls.call(py, (), self.kwargs.as_ref().map(|d| d.as_ref(py))));
 
-        PyRouteWrapper::<'a>::new(_self.unwrap(), locals)
+        PyRouteWrapper::new(instance.unwrap())
     }
 }
 

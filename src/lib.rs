@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
-use pyo3_asyncio::tokio::future_into_py;
+use pyo3_asyncio::{tokio::future_into_py, TaskLocals};
+use once_cell::sync::OnceCell;
 
 mod exceptions;
 mod make_service;
@@ -8,6 +9,8 @@ mod result;
 mod routes;
 mod server;
 mod service;
+
+pub(crate) static LOCAL_TASKS: OnceCell<TaskLocals> = OnceCell::new();
 
 #[pyclass(subclass, dict, name="Route")]
 struct PyRoute;

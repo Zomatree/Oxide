@@ -2,14 +2,12 @@ use std::pin::Pin;
 use std::task;
 use futures::Future;
 use hyper::{Error as HyperError, service::Service};
-use pyo3_asyncio::{TaskLocals};
 
 use crate::routes::Routes;
 use crate::service::ServerService;
 
 pub struct MakeService {
     pub routes: Routes,
-    pub locals: TaskLocals
 }
 
 impl<T> Service<T> for MakeService {
@@ -23,9 +21,9 @@ impl<T> Service<T> for MakeService {
 
     fn call(&mut self, _: T) -> Self::Future {
         let routes = self.routes.clone();
-        let locals = self.locals.clone();
+
         Box::pin(async move {
-            Ok(ServerService { routes, locals })
+            Ok(ServerService { routes })
         })
     }
 }
