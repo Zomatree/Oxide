@@ -5,6 +5,7 @@ use hyper::Server as HyperServer;
 use std::net::SocketAddr;
 
 use crate::LOCAL_TASKS;
+use crate::middleware::MiddlewareWrapper;
 use crate::routes::{Routes, Route};
 use crate::make_service::MakeService;
 use crate::exceptions::{BindingError, WebError};
@@ -13,6 +14,7 @@ use crate::exceptions::{BindingError, WebError};
 #[derive(Debug, Clone, Default)]
 pub struct Server {
     pub routes: Routes,
+    pub middleware: Vec<MiddlewareWrapper>
 }
 
 #[pymethods]
@@ -28,8 +30,18 @@ impl Server {
         self.routes.add_route(route);
     }
 
+    pub fn add_middleware(&mut self, middleware: PyObject) {
+        self.middleware.push(MiddlewareWrapper::new(middleware));
+    }
+
+    pub fn middleware(&mut self, middleware: PyObject) -> PyObject {
+        self.add_middleware(middleware);
+        self.middleware.last().unwrap().0.clone()
+    }
+
     fn start<'a>(&'a self, py: Python<'a>, host: String) -> PyResult<&'a PyAny> {
         let routes = self.routes.clone();
+        let middleware = self.middleware.clone();
 
         let locals = get_current_locals(py)?;
 
@@ -41,7 +53,7 @@ impl Server {
             let addr: SocketAddr = host.parse().unwrap();
             let server = HyperServer::try_bind(&addr)
                 .map_err(|_| BindingError::new_err("could not bind to address"))?
-                .serve(MakeService { routes });
+                .serve(MakeService { routes, middleware });
 
             println!("running on {addr}");
 

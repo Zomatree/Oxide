@@ -1,9 +1,8 @@
-use hyper::Method;
 use pyo3::{prelude::*, types::{PyDict, PyTuple}};
 use pyo3_asyncio::into_future_with_locals;
 use std::sync::Arc;
 
-use crate::LOCAL_TASKS;
+use crate::{LOCAL_TASKS, request::PyRequest};
 
 #[derive(Clone, Debug)]
 pub enum PathPart {
@@ -28,13 +27,21 @@ impl PyRouteWrapper {
         })?.await
     }
 
-    pub async fn call_method(&self, method: Method, var_parts: Vec<String>) -> PyResult<PyObject> {
-        let method_name = method.to_string().to_lowercase();
+    pub async fn call_method(&self, request: Py<PyRequest>, var_parts: Vec<String>) -> PyResult<PyObject> {
+        let (method_name, args) = Python::with_gil(|py| {
+            let method_name = request.getattr(py, "method").unwrap().to_string().split('.').last().unwrap().to_lowercase();
+
+            let mut args = Vec::<PyObject>::with_capacity(var_parts.len() + 1);
+            args.push(request.into_py(py));
+            args.extend(var_parts.into_iter().map(|part| part.into_py(py)));
+
+            (method_name, args)
+        });
 
         Python::with_gil::<_, PyResult<_>>(|py| {
             let coro = self.0
                 .getattr(py, &method_name)?
-                .call(py, PyTuple::new(py, var_parts), None)?;
+                .call(py, PyTuple::new(py, args), None)?;
 
                 into_future_with_locals(LOCAL_TASKS.get().unwrap(), coro.as_ref(py))
         })?.await

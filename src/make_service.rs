@@ -3,11 +3,13 @@ use std::task;
 use futures::Future;
 use hyper::{Error as HyperError, service::Service};
 
+use crate::middleware::MiddlewareWrapper;
 use crate::routes::Routes;
 use crate::service::ServerService;
 
 pub struct MakeService {
     pub routes: Routes,
+    pub middleware: Vec<MiddlewareWrapper>,
 }
 
 impl<T> Service<T> for MakeService {
@@ -21,9 +23,10 @@ impl<T> Service<T> for MakeService {
 
     fn call(&mut self, _: T) -> Self::Future {
         let routes = self.routes.clone();
+        let middleware = self.middleware.clone();
 
         Box::pin(async move {
-            Ok(ServerService { routes })
+            Ok(ServerService { routes, middleware })
         })
     }
 }
